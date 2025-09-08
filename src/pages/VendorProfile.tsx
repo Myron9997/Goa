@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, MapPin, Globe, Instagram, Facebook, Mail, Phone } from 'lucide-react';
+import { ArrowLeft, MessageCircle, MapPin, Globe, Instagram, Facebook, Mail, Phone, X } from 'lucide-react';
 import { VendorService, type VendorWithUser } from '../services/vendorService';
 
 export function VendorProfile() {
@@ -9,6 +9,8 @@ export function VendorProfile() {
   const [vendor, setVendor] = useState<VendorWithUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageTemplate, setMessageTemplate] = useState('');
 
   useEffect(() => {
     const loadVendor = async () => {
@@ -41,6 +43,46 @@ export function VendorProfile() {
           otherUserName: vendor.business_name 
         } 
       });
+    }
+  };
+
+  const handleInstagramMessageClick = () => {
+    if (vendor) {
+      // Set up the message template with business name
+      const template = `Hey ${vendor.business_name}, I found your profile on GoaFYI, I would like to know...`;
+      setMessageTemplate(template);
+      setShowMessageModal(true);
+    }
+  };
+
+  const handleSendInstagramMessage = () => {
+    if (vendor && messageTemplate.trim()) {
+      // Extract username from Instagram URL
+      const instagramUrl = vendor.social_media?.instagram;
+      let username = '';
+      
+      if (instagramUrl && instagramUrl.includes('instagram.com/')) {
+        username = instagramUrl.split('instagram.com/')[1].split('/')[0].replace('@', '');
+      }
+      
+      if (username) {
+        // Copy message to clipboard
+        navigator.clipboard.writeText(messageTemplate.trim()).then(() => {
+          // Open Instagram DM
+          const dmLink = `https://ig.me/m/${username}`;
+          window.open(dmLink, '_blank');
+          
+          // Show success message
+          alert('Message copied to clipboard! Paste it in the Instagram DM that just opened.');
+        }).catch(() => {
+          // Fallback if clipboard fails
+          alert(`Message ready to send:\n\n"${messageTemplate.trim()}"\n\nOpening Instagram DM...`);
+          const dmLink = `https://ig.me/m/${username}`;
+          window.open(dmLink, '_blank');
+        });
+      }
+      
+      setShowMessageModal(false);
     }
   };
 
@@ -175,33 +217,13 @@ export function VendorProfile() {
               
               {vendor.social_media?.instagram && (
                 <div className="flex gap-2">
-                  <a
-                    href={(() => {
-                      // Extract username from Instagram URL
-                      const instagramUrl = vendor.social_media.instagram;
-                      let username = '';
-                      
-                      // Handle different Instagram URL formats
-                      if (instagramUrl.includes('instagram.com/')) {
-                        username = instagramUrl.split('instagram.com/')[1].split('/')[0].replace('@', '');
-                      }
-                      
-                      if (username) {
-                        // Try DM link format
-                        const message = encodeURIComponent("Hey! I came across your profile on GoaFYI and I'm interested in your services for my upcoming event. Could you please share more details?");
-                        return `https://www.instagram.com/direct/new/?recipient=${username}&text=${message}`;
-                      }
-                      
-                      // Fallback to original URL if username extraction fails
-                      return instagramUrl;
-                    })()}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={handleInstagramMessageClick}
                     className="flex items-center gap-2 bg-pink-100 text-pink-700 px-3 py-2 rounded-lg hover:bg-pink-200 transition-colors flex-1"
                   >
                     <Instagram className="w-4 h-4" />
                     <span className="text-sm">Message on Instagram</span>
-                  </a>
+                  </button>
                   
                   <a
                     href={vendor.social_media.instagram}
@@ -258,6 +280,56 @@ export function VendorProfile() {
           </div>
         )}
       </div>
+
+      {/* Message Template Modal */}
+      {showMessageModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Send Instagram Message</h3>
+              <button
+                onClick={() => setShowMessageModal(false)}
+                className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                <p className="text-sm text-blue-800">
+                  💡 <strong>How it works:</strong> Your message will be copied to clipboard, then Instagram DM will open. Just paste and send!
+                </p>
+              </div>
+              
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Your message to {vendor?.business_name}:
+              </label>
+              <textarea
+                value={messageTemplate}
+                onChange={(e) => setMessageTemplate(e.target.value)}
+                className="w-full h-32 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
+                placeholder="Type your message here..."
+              />
+              <div className="flex gap-3 mt-4">
+                <button
+                  onClick={() => setShowMessageModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendInstagramMessage}
+                  disabled={!messageTemplate.trim()}
+                  className="flex-1 px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                  Copy & Open Instagram
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
