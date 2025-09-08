@@ -1,0 +1,15 @@
+{
+  "name": "Wedding Portfolio - Goan Vendors",
+  "short_name": "Wedding Portfolio",
+  "description": "Discover and book Goan wedding vendors - photographers, decorators, venues, and more",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#be123c",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en",
+  "categories": ["lifestyle", "business", "productivity"]
+}
+
+
