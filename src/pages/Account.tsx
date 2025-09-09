@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, MessageCircle } from 'lucide-react';
+import { User } from 'lucide-react';
 import { useSupabase } from '../context/SupabaseContext';
 import { supabase } from '../lib/supabase';
 import { type AuthUser } from '../services/authService';
 import { VendorService } from '../services/vendorService';
-import { MessageService, Conversation } from '../services/messageService';
 import type { Database } from '../lib/supabase';
 import { CATEGORIES } from '../constants';
 
@@ -14,7 +13,6 @@ export function Account() {
   const { user, updateProfile } = useSupabase();
   const [fallbackUser, setFallbackUser] = useState<AuthUser | null>(null);
   const [vendor, setVendor] = useState<Database['public']['Tables']['vendors']['Row'] | null>(null);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -22,6 +20,7 @@ export function Account() {
   // Editable form state for vendor profile
   const [fullName, setFullName] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
   const [instagramUrl, setInstagramUrl] = useState('');
@@ -96,14 +95,13 @@ export function Account() {
           setVendor(v);
         }
         
-        const convos = await MessageService.getConversations(effectiveUser.id);
-        setConversations(convos.slice(0, 3));
         
         // Initialize form with current values
         setFullName(effectiveUser.full_name || '');
         if (v) {
           setIsEditing(false);
           setBusinessName(v.business_name || '');
+          setWhatsappNumber(v.contact_phone || '');
           setWebsiteUrl(v.website || '');
           const sm: any = v.social_media || {};
           setFacebookUrl(sm.facebook || '');
@@ -117,6 +115,7 @@ export function Account() {
           // For viewers, start in edit mode if no vendor profile exists
           setIsEditing(effectiveUser.role === 'viewer');
           setBusinessName('');
+          setWhatsappNumber('');
           setWebsiteUrl('');
           setFacebookUrl('');
           setInstagramUrl('');
@@ -237,6 +236,7 @@ export function Account() {
 
       const updates: any = {
         business_name: businessName,
+        contact_phone: whatsappNumber || null,
         website: websiteUrl || null,
         social_media: {
           facebook: facebookUrl || null,
@@ -254,6 +254,7 @@ export function Account() {
           category: selectedTypes.join(', '),
           location: 'Goa',
           price_range: null as any,
+          contact_phone: whatsappNumber || null,
           website: websiteUrl || null,
           social_media: {
             facebook: facebookUrl || null,
@@ -412,10 +413,14 @@ export function Account() {
                     </div>
 
                     {/* Owner details */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="bg-gray-50 rounded-xl p-4">
                         <p className="text-xs text-gray-500">Owner Name</p>
                         <p className="text-sm font-medium text-gray-900">{fullName || '—'}</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-xl p-4">
+                        <p className="text-xs text-gray-500">WhatsApp Number</p>
+                        <p className="text-sm font-medium text-gray-900">{whatsappNumber || '—'}</p>
                       </div>
                       <div className="bg-gray-50 rounded-xl p-4">
                         <p className="text-xs text-gray-500">Owner Email</p>
@@ -466,6 +471,10 @@ export function Account() {
                         <input value={businessName} onChange={e => setBusinessName(e.target.value)} className="input-field" placeholder="Your business name" />
                       </div>
                       <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">WhatsApp Number</label>
+                        <input value={whatsappNumber} onChange={e => setWhatsappNumber(e.target.value)} className="input-field" placeholder="+91 9876543210" />
+                      </div>
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                         <input value={effectiveUser.email} readOnly className="input-field bg-gray-50" />
                       </div>
@@ -512,7 +521,7 @@ export function Account() {
           </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
               <div className="bg-white rounded-2xl shadow-sm p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -521,18 +530,6 @@ export function Account() {
                   </div>
                   <div className="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center">
                     <User className="w-6 h-6 text-rose-700" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Messages</p>
-                    <p className="text-lg font-bold text-gray-900">{conversations.length}</p>
-                  </div>
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                    <MessageCircle className="w-6 h-6 text-green-700" />
                   </div>
                 </div>
               </div>

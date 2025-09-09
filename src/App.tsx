@@ -1,7 +1,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { SupabaseProvider } from './context/SupabaseContext';
-import { ChatProvider } from './context/ChatContext';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { ProtectedRoute, RoleBasedRedirect } from './components/ProtectedRoute';
@@ -14,7 +13,6 @@ import { SimpleLogin } from './pages/SimpleLogin';
 import { EmailConfirmation } from './pages/EmailConfirmation';
 import { Account } from './pages/Account';
 import { VendorProfile } from './pages/VendorProfile';
-import { Messages } from './pages/Messages';
 // Removed Saved
 import { Admin } from './pages/Admin';
 // Removed Search
@@ -35,7 +33,6 @@ function AppContent() {
           <Route path="/email-confirmation" element={<EmailConfirmation />} />
           <Route path="/account" element={<Account />} />
           <Route path="/vendor/:id" element={<VendorProfile />} />
-          <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
           {/* Removed saved */}
           <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><Admin /></ProtectedRoute>} />
           {/* Removed search */}
@@ -51,9 +48,7 @@ function AppContent() {
 export default function App() {
   return (
     <SupabaseProvider>
-      <ChatProvider>
-        <AppContent />
-      </ChatProvider>
+      <AppContent />
     </SupabaseProvider>
   );
 }

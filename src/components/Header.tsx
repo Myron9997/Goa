@@ -56,14 +56,6 @@ export function Header() {
                 >
                   Profile
                 </button>
-                <button
-                  onClick={() => navigate('/messages')}
-                  className={`text-sm font-medium transition-colors ${
-                    isActive('/messages') ? 'text-rose-700' : 'text-gray-600 hover:text-rose-700'
-                  }`}
-                >
-                  Messages
-                </button>
               </>
             ) : user?.role === 'vendor' ? (
               <>
@@ -74,14 +66,6 @@ export function Header() {
                   }`}
                 >
                   Dashboard
-                </button>
-                <button
-                  onClick={() => navigate('/messages')}
-                  className={`text-sm font-medium transition-colors ${
-                    isActive('/messages') ? 'text-rose-700' : 'text-gray-600 hover:text-rose-700'
-                  }`}
-                >
-                  Messages
                 </button>
               </>
             ) : (
@@ -195,14 +179,6 @@ export function Header() {
                     }`}
                   >
                     Profile
-                  </button>
-                  <button
-                    onClick={() => handleNavigation('/messages')}
-                    className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
-                      isActive('/messages') ? 'bg-rose-50 text-rose-700' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    Messages
                   </button>
                 </>
               )}
