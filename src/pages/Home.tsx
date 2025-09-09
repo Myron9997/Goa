@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus } from 'lucide-react';
+import { Search, Eye, Star } from 'lucide-react';
 import { VendorService, type VendorWithUser } from '../services/vendorService';
 import { MessageCircle } from 'lucide-react';
-import { VendorCard } from '../components/VendorCard';
 import { CategoryCarousel } from '../components/CategoryCarousel';
-import { CATEGORIES } from '../constants';
+import { ViewService } from '../services/viewService';
+import { RatingService } from '../services/ratingService';
 
 export function Home() {
   const navigate = useNavigate();
@@ -14,16 +14,48 @@ export function Home() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [vendorViewCounts, setVendorViewCounts] = useState<Record<string, number>>({});
+  const [vendorRatings, setVendorRatings] = useState<Record<string, { average_rating: number; total_ratings: number }>>({});
+  const [activeFilter, setActiveFilter] = useState<{ type: string; value: string } | null>(null);
 
   // Load vendors from Supabase (lite)
   useEffect(() => {
     const loadVendors = async () => {
       try {
         setLoading(true);
-        // Fetch minimal fields for performance
+        // Fetch minimal fields for performance (now with caching)
         const lite = await VendorService.getVendorsLite();
         // Coerce to VendorWithUser-compatible shape where needed
         setVendors(lite as any);
+        
+        // Load view counts and ratings for all vendors
+        const viewCounts: Record<string, number> = {};
+        const ratings: Record<string, { average_rating: number; total_ratings: number }> = {};
+        
+        for (const vendor of lite as any[]) {
+          try {
+            // Load view count
+            const count = await ViewService.getViewCount(vendor.id);
+            viewCounts[vendor.id] = count;
+            
+            // Load rating stats
+            const ratingStats = await RatingService.getVendorRatingStats(vendor.id);
+            if (ratingStats) {
+              ratings[vendor.id] = {
+                average_rating: ratingStats.average_rating,
+                total_ratings: ratingStats.total_ratings
+              };
+            } else {
+              ratings[vendor.id] = { average_rating: 0, total_ratings: 0 };
+            }
+          } catch (error) {
+            console.error(`Error loading data for vendor ${vendor.id}:`, error);
+            viewCounts[vendor.id] = 0;
+            ratings[vendor.id] = { average_rating: 0, total_ratings: 0 };
+          }
+        }
+        setVendorViewCounts(viewCounts);
+        setVendorRatings(ratings);
       } catch (error) {
         console.error('Error loading vendors:', error);
       } finally {
@@ -37,14 +69,49 @@ export function Home() {
   const filteredVendors = useMemo(() => {
     let filtered = vendors;
     
-    // Filter by category
-    if (activeCategory !== 'All') {
+    // Filter by category (only if not a special filter)
+    if (activeCategory !== 'All' && !activeCategory.startsWith('View-') && !activeCategory.startsWith('Rating-') && !activeCategory.startsWith('Location-')) {
       filtered = filtered.filter(vendor => {
         if (!vendor.category) return false;
         // Handle comma-separated categories
         const categories = vendor.category.split(',').map(cat => cat.trim().toLowerCase());
         return categories.includes(activeCategory.toLowerCase());
       });
+    }
+    
+    // Apply special filters
+    if (activeFilter) {
+      switch (activeFilter.type) {
+        case 'View':
+          if (activeFilter.value === 'highest') {
+            filtered = filtered.sort((a, b) => (vendorViewCounts[b.id] || 0) - (vendorViewCounts[a.id] || 0));
+          } else if (activeFilter.value === 'lowest') {
+            filtered = filtered.sort((a, b) => (vendorViewCounts[a.id] || 0) - (vendorViewCounts[b.id] || 0));
+          }
+          break;
+          
+        case 'Rating':
+          if (activeFilter.value === 'highest') {
+            filtered = filtered.sort((a, b) => {
+              const ratingA = vendorRatings[a.id]?.average_rating || 0;
+              const ratingB = vendorRatings[b.id]?.average_rating || 0;
+              return ratingB - ratingA;
+            });
+          } else if (activeFilter.value === 'lowest') {
+            filtered = filtered.sort((a, b) => {
+              const ratingA = vendorRatings[a.id]?.average_rating || 0;
+              const ratingB = vendorRatings[b.id]?.average_rating || 0;
+              return ratingA - ratingB;
+            });
+          }
+          break;
+          
+        case 'Location':
+          // For now, just sort by business name since we don't have location coordinates
+          // TODO: Implement actual location-based filtering when location data is available
+          filtered = filtered.sort((a, b) => a.business_name.localeCompare(b.business_name));
+          break;
+      }
     }
     
     // Filter by search query
@@ -57,7 +124,7 @@ export function Home() {
     }
     
     return filtered;
-  }, [vendors, activeCategory, searchQuery]);
+  }, [vendors, activeCategory, searchQuery, activeFilter, vendorViewCounts, vendorRatings]);
 
 
   const handleVendorClick = (vendor: VendorWithUser) => {
@@ -68,6 +135,29 @@ export function Home() {
     setActiveCategory(category);
     setSearchQuery(''); // Clear search when changing category
     setSearchInput(''); // Clear search input when changing category
+    
+    // Parse special filter commands
+    if (category.startsWith('View-')) {
+      const viewType = category.replace('View-', '');
+      if (viewType === 'none') {
+        setActiveFilter(null);
+      } else {
+        setActiveFilter({ type: 'View', value: viewType });
+      }
+    } else if (category.startsWith('Rating-')) {
+      const ratingType = category.replace('Rating-', '');
+      if (ratingType === 'none') {
+        setActiveFilter(null);
+      } else {
+        setActiveFilter({ type: 'Rating', value: ratingType });
+      }
+    } else if (category.startsWith('Location-')) {
+      const locationRadius = category.replace('Location-', '');
+      setActiveFilter({ type: 'Location', value: locationRadius });
+    } else {
+      // Regular category selection
+      setActiveFilter(null);
+    }
   };
 
   const handleSearchInputChange = (query: string) => {
@@ -79,6 +169,29 @@ export function Home() {
     if (searchInput.trim()) {
       setActiveCategory('All'); // Reset category when searching
     }
+  };
+
+  const renderStars = (rating: number, size: 'sm' | 'md' | 'lg' = 'sm') => {
+    const sizeClasses = {
+      sm: 'w-3 h-3',
+      md: 'w-4 h-4',
+      lg: 'w-5 h-5'
+    };
+
+    return (
+      <div className="flex items-center space-x-0.5">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            className={`${sizeClasses[size]} ${
+              star <= rating
+                ? 'text-yellow-400 fill-current'
+                : 'text-gray-300'
+            }`}
+          />
+        ))}
+      </div>
+    );
   };
 
   if (loading) {
@@ -99,20 +212,29 @@ export function Home() {
         {/* Search and Categories (sticky search on mobile) */}
         <div className="space-y-3">
           <div className="sticky top-[56px] z-30">
-            <div className="bg-white rounded-2xl p-3 shadow-sm">
-              <div className="flex gap-2">
+            <div className="bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-lg border border-white/20" style={{
+              boxShadow: '0 8px 20px -5px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%)'
+            }}>
+              <div className="flex gap-3">
                 <div className="relative flex-1">
                   <input
                     type="text"
                     placeholder="Search vendors, locations, or services..."
                     value={searchInput}
                     onChange={(e) => handleSearchInputChange(e.target.value)}
-                    className="w-full pl-3 pr-3 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent"
+                    className="w-full pl-4 pr-4 py-3 border border-white/30 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500/50 focus:border-rose-500/50 transition-all duration-200 bg-white/60 backdrop-blur-sm shadow-sm hover:shadow-md"
+                    style={{
+                      boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                    }}
                   />
                 </div>
                 <button
                   onClick={handleSearch}
-                  className="px-4 py-3 bg-rose-700 text-white rounded-lg hover:bg-rose-800 transition-colors flex items-center justify-center"
+                  className="px-6 py-3 bg-rose-700/90 backdrop-blur-sm text-white rounded-xl hover:bg-rose-800/90 transition-all duration-200 flex items-center justify-center shadow-md hover:shadow-lg hover:-translate-y-0.5 transform border border-rose-600/20"
+                  style={{
+                    boxShadow: '0 4px 12px -2px rgba(190, 24, 93, 0.3), 0 2px 4px -1px rgba(190, 24, 93, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                  }}
                 >
                   <Search className="w-5 h-5" />
                 </button>
@@ -176,23 +298,58 @@ export function Home() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
               {filteredVendors.map((vendor: any) => (
-                <div key={vendor.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div key={vendor.id} className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-white/20 overflow-hidden transform hover:scale-105 hover:shadow-xl transition-all duration-300 cursor-pointer" style={{
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                  background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.6) 100%)'
+                }}>
                   <div 
-                    className="h-32 w-full bg-cover bg-center cursor-pointer" 
+                    className="h-20 w-full bg-cover bg-center relative" 
                     style={{ backgroundImage: `url('${(vendor.portfolio_images && vendor.portfolio_images[0]) || '/placeholder-image.svg'}')` }}
                     onClick={() => handleVendorClick(vendor)}
-                  />
-                  <div className="p-3">
-                    <div className="mb-3">
-                      <h3 className="font-semibold text-gray-900 text-sm truncate">{vendor.business_name}</h3>
-                      <p className="text-xs text-gray-500 truncate">{vendor.category}</p>
+                  >
+                    {/* View Count - Top Right Corner - Glassy 3D */}
+                    <div 
+                      className="absolute top-1.5 right-1.5 px-1.5 py-1 rounded-lg bg-white/90 backdrop-blur-md flex items-center gap-1 shadow-lg transform hover:scale-105 transition-all duration-200 border border-white/30"
+                      style={{
+                        boxShadow: '0 4px 12px -2px rgba(0, 0, 0, 0.15), 0 2px 4px -1px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.4)',
+                        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%)'
+                      }}
+                    >
+                      <Eye className="w-2.5 h-2.5 text-gray-700 drop-shadow-sm" />
+                      <span className="text-xs font-semibold text-gray-800 drop-shadow-sm">{vendorViewCounts[vendor.id] || 0}</span>
+                    </div>
+                  </div>
+                  <div className="p-1.5 bg-white/20 backdrop-blur-sm">
+                    <div className="mb-1.5">
+                      <h3 className="font-semibold text-gray-900 text-xs truncate drop-shadow-sm">{vendor.business_name}</h3>
+                      <p className="text-xs text-gray-600 truncate drop-shadow-sm">{vendor.category}</p>
+                      
+                      {/* Rating */}
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {vendorRatings[vendor.id] && vendorRatings[vendor.id].total_ratings > 0 ? (
+                          <>
+                            {renderStars(Math.round(vendorRatings[vendor.id].average_rating), 'sm')}
+                            <span className="text-xs text-gray-700 font-medium drop-shadow-sm">
+                              {vendorRatings[vendor.id].average_rating.toFixed(1)}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            {renderStars(0, 'sm')}
+                            <span className="text-xs text-gray-500 drop-shadow-sm">0.0</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
                         navigate('/messages', { state: { otherUserId: vendor.user_id, otherUserName: vendor.business_name } });
                       }} 
-                      className="w-full bg-rose-700 text-white text-xs py-2 px-3 rounded-lg hover:bg-rose-800 transition-colors flex items-center justify-center gap-1"
+                      className="w-full bg-rose-700/90 backdrop-blur-sm text-white text-xs py-1 px-2 rounded-lg hover:bg-rose-800/90 transition-all duration-200 flex items-center justify-center gap-1 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transform border border-rose-600/20"
+                      style={{
+                        boxShadow: '0 4px 12px -2px rgba(190, 24, 93, 0.4), 0 2px 4px -1px rgba(190, 24, 93, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)'
+                      }}
                     >
                       <MessageCircle className="w-3 h-3" />
                       Message
@@ -208,4 +365,12 @@ export function Home() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
 

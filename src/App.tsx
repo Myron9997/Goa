@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { SupabaseProvider } from './context/SupabaseContext';
+import { ChatProvider } from './context/ChatContext';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { ProtectedRoute, RoleBasedRedirect } from './components/ProtectedRoute';
@@ -50,7 +51,9 @@ function AppContent() {
 export default function App() {
   return (
     <SupabaseProvider>
-      <AppContent />
+      <ChatProvider>
+        <AppContent />
+      </ChatProvider>
     </SupabaseProvider>
   );
 }

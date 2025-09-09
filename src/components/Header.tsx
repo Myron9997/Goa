@@ -177,12 +177,6 @@ export function Header() {
                   >
                     Dashboard
                   </button>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Sign Out
-                  </button>
                 </>
               ) : (
                 <>

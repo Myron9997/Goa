@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Lock } from 'lucide-react';
 import { useSupabase } from '../context/SupabaseContext';
@@ -11,6 +11,14 @@ export function VendorLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Lock scroll on vendor login page
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,20 +52,23 @@ export function VendorLogin() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-[100dvh] h-[100dvh] bg-white overflow-hidden">
       <div className="px-4 pt-4">
-        <div className="flex items-center gap-3 mb-6">
-          <button onClick={() => navigate('/')} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+        <div className="relative mb-4">
+          <button onClick={() => navigate('/')} className="absolute left-0 p-2 rounded-lg hover:bg-gray-100 transition-colors">
             <ArrowLeft className="w-4 h-4 text-gray-600" />
           </button>
-          <h1 className="text-lg font-bold text-gray-900">Vendor Login</h1>
         </div>
 
         {/* Logo Section */}
-        <div className="flex justify-center mb-6">
-          <div className="w-40 h-40 bg-white rounded-full shadow-sm flex items-center justify-center">
-            <img src="/logo.png" alt="GoaFYI Logo" className="w-32 h-32 rounded-full object-cover" />
+        <div className="flex justify-center mb-4">
+          <div className="w-56 h-56 bg-white rounded-full shadow-sm flex items-center justify-center">
+            <img src="/logo.png" alt="GoaFYI Logo" className="w-44 h-44 rounded-full object-cover" />
           </div>
+        </div>
+
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-serif font-bold text-gray-900">Vendor Login</h1>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm p-4">

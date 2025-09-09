@@ -89,10 +89,16 @@ export function Account() {
     }
     (async () => {
       try {
-        const v = await VendorService.getVendorByUserIdCachedFirst(effectiveUser.id);
-        setVendor(v);
+        let v = null;
+        // Only query vendors table for vendors, not viewers
+        if (effectiveUser.role === 'vendor') {
+          v = await VendorService.getVendorByUserIdCachedFirst(effectiveUser.id);
+          setVendor(v);
+        }
+        
         const convos = await MessageService.getConversations(effectiveUser.id);
         setConversations(convos.slice(0, 3));
+        
         // Initialize form with current values
         setFullName(effectiveUser.full_name || '');
         if (v) {
@@ -108,7 +114,8 @@ export function Account() {
             .filter(Boolean);
           setSelectedTypes(types);
         } else {
-          setIsEditing(true);
+          // For viewers, start in edit mode if no vendor profile exists
+          setIsEditing(effectiveUser.role === 'viewer');
           setBusinessName('');
           setWebsiteUrl('');
           setFacebookUrl('');
@@ -165,18 +172,45 @@ export function Account() {
   const handleSaveViewerProfile = async () => {
     try {
       setSaving(true);
+      
+      // Update both users table and auth metadata
+      const updates: any = {};
       if ((effectiveUser.full_name || '') !== fullName) {
-        await supabase.from('users').update({ full_name: fullName }).eq('id', effectiveUser.id);
+        updates.full_name = fullName;
       }
+      
       if (profileFile) {
         const ext = profileFile.name.split('.').pop();
         const fileName = `${effectiveUser.id}/${Date.now()}.${ext}`;
         const { error: uploadError } = await supabase.storage.from('vendor-images').upload(fileName, profileFile);
         if (uploadError) throw uploadError;
         const { data } = supabase.storage.from('vendor-images').getPublicUrl(fileName);
-        await updateProfile({ avatar_url: data.publicUrl } as any);
+        updates.avatar_url = data.publicUrl;
         setProfileFile(null);
       }
+      
+      // Update users table first
+      if (Object.keys(updates).length > 0) {
+        const { error: dbError } = await supabase.from('users').update(updates).eq('id', effectiveUser.id);
+        if (dbError) {
+          console.error('Database update error:', dbError);
+          throw dbError;
+        }
+      }
+      
+      // Update auth metadata (for immediate UI update)
+      if (Object.keys(updates).length > 0) {
+        await updateProfile(updates);
+      }
+      
+      // Update local fallback user state if using fallback
+      if (fallbackUser && Object.keys(updates).length > 0) {
+        setFallbackUser({ ...fallbackUser, ...updates });
+      }
+      
+      // Refresh the page to ensure all data is updated
+      window.location.reload();
+      
     } catch (e) {
       console.error('Save viewer profile error:', e);
       alert('Failed to save profile. Please try again.');
@@ -280,19 +314,26 @@ export function Account() {
             <div className="lg:col-span-3">
             <div className="bg-white rounded-2xl shadow-sm p-6">
                 <div className="flex flex-col items-center gap-4 mb-4">
-                  {user?.avatar_url ? (
-                    <img src={user.avatar_url} alt="Profile" className="w-24 h-24 rounded-full object-cover" />
+                  {effectiveUser.avatar_url ? (
+                    <img src={effectiveUser.avatar_url} alt="Profile" className="w-24 h-24 rounded-full object-cover" />
                   ) : (
                     <div className="w-24 h-24 rounded-full bg-rose-700 text-white flex items-center justify-center text-3xl font-bold">
                   {(effectiveUser.full_name || effectiveUser.email).charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <input type="file" accept="image/*" onChange={e => setProfileFile(e.target.files?.[0] || null)} className="block w-full text-sm text-gray-600" />
+                  {isEditing && (
+                    <input type="file" accept="image/*" onChange={e => setProfileFile(e.target.files?.[0] || null)} className="block w-full text-sm text-gray-600" />
+                  )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                    <input value={fullName} onChange={e => setFullName(e.target.value)} className="input-field" placeholder="Your full name" />
+                    <input 
+                      value={fullName} 
+                      onChange={e => setFullName(e.target.value)} 
+                      className="input-field" 
+                      placeholder="Your full name"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
@@ -300,7 +341,15 @@ export function Account() {
                   </div>
                 </div>
                 <div className="mt-6 flex justify-end">
-                  <button disabled={saving} onClick={handleSaveViewerProfile} className="btn-primary disabled:opacity-50">{saving ? 'Saving...' : 'Save Profile'}</button>
+                  {isEditing ? (
+                    <button disabled={saving} onClick={handleSaveViewerProfile} className="btn-primary disabled:opacity-50">
+                      {saving ? 'Saving...' : 'Save Profile'}
+                    </button>
+                  ) : (
+                    <button onClick={() => setIsEditing(true)} className="btn-secondary">
+                      Edit Profile
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

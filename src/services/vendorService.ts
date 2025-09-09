@@ -17,6 +17,12 @@ export interface VendorWithUser extends Vendor {
 }
 
 export class VendorService {
+  // Cache configuration
+  private static readonly VENDOR_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+  private static readonly VENDOR_LIST_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private static readonly VENDOR_CACHE_PREFIX = 'vendor_profile_';
+  private static readonly VENDOR_LIST_CACHE_PREFIX = 'vendor_list_';
+
   // Simple localStorage cache helpers
   private static getCache<T>(key: string, ttlMs: number): T | null {
     try {
@@ -33,12 +39,25 @@ export class VendorService {
 
   // Get minimal vendor list for lightweight listing
   static async getVendorsLite(): Promise<Array<Pick<Vendor, 'id' | 'user_id' | 'business_name' | 'category' | 'portfolio_images' | 'social_media'>>> {
+    const cacheKey = `${this.VENDOR_LIST_CACHE_PREFIX}lite`;
+    const cached = this.getCache<Array<Pick<Vendor, 'id' | 'user_id' | 'business_name' | 'category' | 'portfolio_images' | 'social_media'>>>(cacheKey, this.VENDOR_LIST_CACHE_TTL);
+    
+    if (cached) {
+      // Return cached data immediately
+      return cached;
+    }
+
     const { data, error } = await supabase
       .from('vendors')
       .select('id,user_id,business_name,category,portfolio_images,social_media')
 
     if (error) throw error
-    return data as any
+    
+    const result = data as any;
+    // Cache the result
+    this.setCache(cacheKey, result);
+    
+    return result;
   }
 
   private static setCache<T>(key: string, data: T) {
@@ -127,6 +146,33 @@ export class VendorService {
     }
 
     return data as VendorWithUser
+  }
+
+  // Cached-first getter for vendor by ID (stale-while-revalidate)
+  static async getVendorByIdCachedFirst(id: string, ttlMs: number = this.VENDOR_CACHE_TTL): Promise<VendorWithUser | null> {
+    const cacheKey = `${this.VENDOR_CACHE_PREFIX}${id}`;
+    const cached = this.getCache<VendorWithUser | null>(cacheKey, ttlMs);
+    
+    if (cached !== null) {
+      // Refresh in background (stale-while-revalidate pattern)
+      this.getVendorById(id)
+        .then((fresh) => {
+          if (fresh) {
+            this.setCache(cacheKey, fresh);
+          }
+        })
+        .catch(() => {
+          // Ignore background refresh errors
+        });
+      return cached;
+    }
+
+    // No cache, fetch fresh data
+    const fresh = await this.getVendorById(id);
+    if (fresh) {
+      this.setCache(cacheKey, fresh);
+    }
+    return fresh;
   }
 
   // Get vendor by user ID
@@ -290,5 +336,31 @@ export class VendorService {
 
     if (error) throw error
     try { localStorage.setItem(`vendor_cover_${vendorId}`, JSON.stringify({ ts: Date.now(), url: images[0] || null })) } catch {}
+    
+    // Clear vendor cache when portfolio is updated
+    this.clearVendorCache(vendorId);
+  }
+
+  // Clear cache for a specific vendor
+  static clearVendorCache(vendorId: string): void {
+    try {
+      localStorage.removeItem(`${this.VENDOR_CACHE_PREFIX}${vendorId}`);
+    } catch {
+      // ignore errors
+    }
+  }
+
+  // Clear all vendor cache
+  static clearAllVendorCache(): void {
+    try {
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith(this.VENDOR_CACHE_PREFIX) || key.startsWith(this.VENDOR_LIST_CACHE_PREFIX)) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch {
+      // ignore errors
+    }
   }
 }

@@ -1,18 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, MapPin, Globe, Instagram, Facebook, Mail, Phone, X } from 'lucide-react';
+import { ArrowLeft, MessageCircle, MapPin, Globe, Instagram, Facebook, Mail, Phone, X, Eye, Star } from 'lucide-react';
 import { VendorService, type VendorWithUser } from '../services/vendorService';
+import { ViewService } from '../services/viewService';
+import { RatingService, type VendorRating } from '../services/ratingService';
+import { RatingModal } from '../components/RatingModal';
+import { RatingDisplay } from '../components/RatingDisplay';
+import { useSupabase } from '../context/SupabaseContext';
+
+// Function to get category-specific colors and gradients
+const getCategoryColors = (category: string) => {
+  const colorMap: Record<string, { bg: string; text: string }> = {
+    'Wedding Planner': { bg: 'bg-gradient-to-r from-purple-500 to-pink-500 text-white', text: 'text-white' },
+    'Emcee': { bg: 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white', text: 'text-white' },
+    'Decorator': { bg: 'bg-gradient-to-r from-green-500 to-emerald-500 text-white', text: 'text-white' },
+    'Photographer': { bg: 'bg-gradient-to-r from-orange-500 to-red-500 text-white', text: 'text-white' },
+    'Cameraman': { bg: 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white', text: 'text-white' },
+    'Catering': { bg: 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white', text: 'text-white' },
+    'Venue': { bg: 'bg-gradient-to-r from-teal-500 to-blue-500 text-white', text: 'text-white' },
+    'Band': { bg: 'bg-gradient-to-r from-pink-500 to-rose-500 text-white', text: 'text-white' },
+    'Solo Artist': { bg: 'bg-gradient-to-r from-violet-500 to-purple-500 text-white', text: 'text-white' },
+    'DJ': { bg: 'bg-gradient-to-r from-gray-700 to-gray-900 text-white', text: 'text-white' },
+    'Florist': { bg: 'bg-gradient-to-r from-green-400 to-green-600 text-white', text: 'text-white' },
+    'Makeup Artist': { bg: 'bg-gradient-to-r from-rose-400 to-pink-600 text-white', text: 'text-white' },
+    'Suit Designer': { bg: 'bg-gradient-to-r from-slate-600 to-slate-800 text-white', text: 'text-white' },
+    'Gown Designer': { bg: 'bg-gradient-to-r from-fuchsia-500 to-purple-600 text-white', text: 'text-white' },
+    'Bridesmaid Dresses': { bg: 'bg-gradient-to-r from-pink-400 to-rose-500 text-white', text: 'text-white' },
+    'Best Man Suits': { bg: 'bg-gradient-to-r from-blue-600 to-indigo-700 text-white', text: 'text-white' },
+    'Accessories': { bg: 'bg-gradient-to-r from-amber-500 to-yellow-600 text-white', text: 'text-white' },
+    'Bar Services': { bg: 'bg-gradient-to-r from-red-500 to-red-700 text-white', text: 'text-white' }
+  };
+  
+  return colorMap[category] || { bg: 'bg-gradient-to-r from-gray-500 to-gray-600 text-white', text: 'text-white' };
+};
 
 export function VendorProfile() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useSupabase();
   const [vendor, setVendor] = useState<VendorWithUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messageTemplate, setMessageTemplate] = useState('');
+  const [viewCount, setViewCount] = useState<number>(0);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [userRating, setUserRating] = useState<VendorRating | null>(null);
+  const [ratingStats, setRatingStats] = useState<{ average_rating: number; total_ratings: number } | null>(null);
 
   useEffect(() => {
+    // Scroll to top when component mounts
+    window.scrollTo(0, 0);
+    
     const loadVendor = async () => {
       if (!id) {
         setError('Vendor ID not provided');
@@ -22,18 +61,49 @@ export function VendorProfile() {
 
       try {
         setLoading(true);
-        const vendorData = await VendorService.getVendorById(id);
+        const vendorData = await VendorService.getVendorByIdCachedFirst(id);
+        console.log('Vendor data loaded:', vendorData);
+        console.log('User avatar URL:', vendorData?.user?.avatar_url);
         setVendor(vendorData);
+        
+        // Ensure we're at the top after setting vendor data
+        window.scrollTo(0, 0);
+
+        // Track the view
+        if (vendorData) {
+          await ViewService.trackViewWithDuplicatePrevention(id, user?.id);
+          
+          // Load view count
+          const count = await ViewService.getViewCount(id);
+          setViewCount(count);
+
+          // Load user's rating if logged in
+          if (user?.id) {
+            const existingRating = await RatingService.getUserRating(id, user.id);
+            setUserRating(existingRating);
+          }
+
+          // Load rating stats
+          const stats = await RatingService.getVendorRatingStats(id);
+          if (stats) {
+            setRatingStats({
+              average_rating: stats.average_rating,
+              total_ratings: stats.total_ratings
+            });
+          }
+        }
       } catch (err) {
         console.error('Error loading vendor:', err);
         setError('Failed to load vendor profile');
       } finally {
         setLoading(false);
+        // Final scroll to top to ensure we're at the top
+        window.scrollTo(0, 0);
       }
     };
 
     loadVendor();
-  }, [id]);
+  }, [id, user?.id]);
 
   const handleMessageClick = () => {
     if (vendor) {
@@ -86,6 +156,44 @@ export function VendorProfile() {
     }
   };
 
+  const handleRatingSubmitted = (rating: VendorRating) => {
+    setUserRating(rating);
+    // Refresh rating stats
+    if (id) {
+      RatingService.getVendorRatingStats(id).then(stats => {
+        if (stats) {
+          setRatingStats({
+            average_rating: stats.average_rating,
+            total_ratings: stats.total_ratings
+          });
+        }
+      });
+    }
+  };
+
+  const renderStars = (rating: number, size: 'sm' | 'md' | 'lg' = 'md') => {
+    const sizeClasses = {
+      sm: 'w-3 h-3',
+      md: 'w-4 h-4',
+      lg: 'w-5 h-5'
+    };
+
+    return (
+      <div className="flex items-center space-x-0.5">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            className={`${sizeClasses[size]} ${
+              star <= rating
+                ? 'text-yellow-400 fill-current'
+                : 'text-gray-300'
+            }`}
+          />
+        ))}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -121,44 +229,53 @@ export function VendorProfile() {
     ? vendor.portfolio_images[0] 
     : '/placeholder-image.svg';
   
-  const profileImage = vendor.avatar_url || '/placeholder-image.svg';
+  const profileImage = vendor.user?.avatar_url || '/placeholder-image.svg';
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header with back button */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/home')}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </button>
-          <h1 className="text-lg font-semibold text-gray-900">Vendor Profile</h1>
-        </div>
-      </div>
-
       <div className="max-w-4xl mx-auto">
-        {/* Cover Photo */}
+        {/* Cover Photo with back button */}
         <div className="relative h-48 sm:h-64">
           <div 
             className="w-full h-full bg-cover bg-center"
             style={{ backgroundImage: `url('${coverImage}')` }}
           />
           <div className="absolute inset-0 bg-black bg-opacity-20" />
+          
+          {/* Back button positioned on cover image */}
+          <button
+            onClick={() => navigate('/home')}
+            className="absolute top-4 left-4 p-2 rounded-lg bg-white/80 backdrop-blur-sm hover:bg-white/90 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-700" />
+          </button>
+          
+          {/* View count in top right corner */}
+          <div className="absolute top-4 right-4 px-3 py-2 rounded-lg bg-white/80 backdrop-blur-sm flex items-center gap-2">
+            <Eye className="w-4 h-4 text-gray-600" />
+            <span className="text-sm font-medium text-gray-700">{viewCount}</span>
+          </div>
         </div>
 
         {/* Profile Section */}
         <div className="relative -mt-16 px-4 pb-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 transform hover:scale-[1.02] transition-transform duration-200">
             {/* Profile Picture */}
             <div className="flex flex-col items-center mb-6">
-              <div className="w-24 h-24 rounded-full border-4 border-white shadow-lg overflow-hidden -mt-12">
-                <img
-                  src={profileImage}
-                  alt={vendor.business_name}
-                  className="w-full h-full object-cover"
-                />
+              <div className="w-24 h-24 rounded-full shadow-2xl overflow-hidden -mt-12 transform hover:scale-110 transition-transform duration-300" style={{
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+              }}>
+                {vendor.user?.avatar_url ? (
+                  <img
+                    src={vendor.user.avatar_url}
+                    alt={vendor.business_name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center text-white text-2xl font-bold">
+                    {(vendor.business_name || vendor.full_name || 'V').charAt(0).toUpperCase()}
+                  </div>
+                )}
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mt-4 text-center">
                 {vendor.business_name}
@@ -166,19 +283,59 @@ export function VendorProfile() {
               <p className="text-gray-600 text-center">
                 {vendor.full_name}
               </p>
+              
+              {/* Rating Display */}
+              <div className="flex items-center justify-center gap-2 mt-2">
+                {ratingStats && ratingStats.total_ratings > 0 ? (
+                  <>
+                    {renderStars(Math.round(ratingStats.average_rating), 'sm')}
+                    <span className="text-sm font-medium text-gray-700">
+                      {ratingStats.average_rating.toFixed(1)}
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      ({ratingStats.total_ratings} {ratingStats.total_ratings === 1 ? 'rating' : 'ratings'})
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {renderStars(0, 'sm')}
+                    <span className="text-sm font-medium text-gray-500">0.0</span>
+                    <span className="text-xs text-gray-500">(0 ratings)</span>
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* Business Category */}
-            {vendor.category && (
-              <div className="flex justify-center mb-6">
-                <span className="bg-rose-100 text-rose-700 px-4 py-2 rounded-full text-sm font-medium">
-                  {vendor.category}
-                </span>
-              </div>
-            )}
+             {/* Business Categories */}
+             {vendor.category && (
+               <div className="flex flex-wrap justify-center gap-2 mb-4">
+                 {vendor.category.split(',').map((cat, index) => {
+                   const trimmedCat = cat.trim();
+                   const categoryColors = getCategoryColors(trimmedCat);
+                   return (
+                     <span
+                       key={index}
+                       className={`${categoryColors.bg} ${categoryColors.text} px-3 py-1.5 rounded-full text-xs font-medium shadow-sm`}
+                     >
+                       {trimmedCat}
+                     </span>
+                   );
+                 })}
+               </div>
+             )}
+
+             {/* Location Button */}
+             {vendor.location && (
+               <div className="flex justify-center mb-2">
+                 <span className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-sm flex items-center gap-2">
+                   <MapPin className="w-4 h-4" />
+                   {vendor.location}
+                 </span>
+               </div>
+             )}
 
             {/* Contact Information */}
-            <div className="space-y-4 mb-6">
+            <div className="space-y-4 mb-2">
               {vendor.email && (
                 <div className="flex items-center gap-3">
                   <Mail className="w-5 h-5 text-gray-400" />
@@ -193,12 +350,6 @@ export function VendorProfile() {
                 </div>
               )}
 
-              {vendor.location && (
-                <div className="flex items-center gap-3">
-                  <MapPin className="w-5 h-5 text-gray-400" />
-                  <span className="text-gray-700">{vendor.location}</span>
-                </div>
-              )}
             </div>
 
             {/* Social Media Links */}
@@ -215,28 +366,6 @@ export function VendorProfile() {
                 </a>
               )}
               
-              {vendor.social_media?.instagram && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleInstagramMessageClick}
-                    className="flex items-center gap-2 bg-pink-100 text-pink-700 px-3 py-2 rounded-lg hover:bg-pink-200 transition-colors flex-1"
-                  >
-                    <Instagram className="w-4 h-4" />
-                    <span className="text-sm">Message on Instagram</span>
-                  </button>
-                  
-                  <a
-                    href={vendor.social_media.instagram}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors"
-                    title="View Instagram Profile"
-                  >
-                    <Instagram className="w-4 h-4" />
-                    <span className="text-sm">Profile</span>
-                  </a>
-                </div>
-              )}
               
               {vendor.social_media?.facebook && (
                 <a
@@ -251,16 +380,47 @@ export function VendorProfile() {
               )}
             </div>
 
-            {/* Message Button */}
-            <button
-              onClick={handleMessageClick}
-              className="w-full bg-rose-700 text-white py-3 px-6 rounded-lg font-semibold hover:bg-rose-800 transition-colors flex items-center justify-center gap-2"
-            >
-              <MessageCircle className="w-5 h-5" />
-              Send Message
-            </button>
+            {/* Message Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleMessageClick}
+                className="flex-1 bg-rose-700 text-white py-2 px-3 rounded-lg text-sm font-medium hover:bg-rose-800 transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transform"
+                style={{
+                  boxShadow: '0 10px 25px -5px rgba(190, 24, 93, 0.3), 0 4px 6px -2px rgba(190, 24, 93, 0.1)'
+                }}
+              >
+                <MessageCircle className="w-4 h-4" />
+                Send Message
+              </button>
+              
+              {vendor.social_media?.instagram && (
+                <button
+                  onClick={handleInstagramMessageClick}
+                  className="flex-1 bg-pink-100 text-pink-700 py-2 px-3 rounded-lg text-sm font-medium hover:bg-pink-200 transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:-translate-y-1 transform"
+                  style={{
+                    boxShadow: '0 10px 25px -5px rgba(236, 72, 153, 0.3), 0 4px 6px -2px rgba(236, 72, 153, 0.1)'
+                  }}
+                >
+                  <Instagram className="w-4 h-4" />
+                  Message on Instagram
+                </button>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Ratings & Reviews Section */}
+        {user && (
+          <div className="px-4 pb-6">
+            <RatingDisplay
+              vendorId={vendor.id}
+              vendorName={vendor.business_name}
+              userId={user.id}
+              onRateClick={() => setShowRatingModal(true)}
+              showRateButton={true}
+            />
+          </div>
+        )}
 
         {/* Portfolio Images */}
         {vendor.portfolio_images && vendor.portfolio_images.length > 1 && (
@@ -329,6 +489,19 @@ export function VendorProfile() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Rating Modal */}
+      {showRatingModal && user && vendor && (
+        <RatingModal
+          isOpen={showRatingModal}
+          onClose={() => setShowRatingModal(false)}
+          vendorId={vendor.id}
+          vendorName={vendor.business_name}
+          userId={user.id}
+          onRatingSubmitted={handleRatingSubmitted}
+          existingRating={userRating}
+        />
       )}
     </div>
   );

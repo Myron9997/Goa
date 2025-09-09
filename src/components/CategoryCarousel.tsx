@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, List } from 'lucide-react';
+import { X, List, ChevronUp, ChevronDown, MapPin } from 'lucide-react';
 import { CATEGORIES } from '../constants';
 import { VendorService } from '../services/vendorService';
 
@@ -10,6 +10,10 @@ interface CategoryCarouselProps {
 
 export function CategoryCarousel({ activeCategory, onSelectCategory }: CategoryCarouselProps) {
   const [showCategoryList, setShowCategoryList] = useState(false);
+  const [showViewPopup, setShowViewPopup] = useState(false);
+  const [showRatingPopup, setShowRatingPopup] = useState(false);
+  const [showLocationPopup, setShowLocationPopup] = useState(false);
+  const [locationRadius, setLocationRadius] = useState(10);
   const [availableCategories, setAvailableCategories] = useState<string[]>(['All']);
 
   // Load available categories from database and merge with constants
@@ -53,14 +57,38 @@ export function CategoryCarousel({ activeCategory, onSelectCategory }: CategoryC
     setShowCategoryList(false);
   };
 
+  const handleViewSelect = (viewType: string) => {
+    if (viewType === 'none') {
+      onSelectCategory('All');
+    } else {
+      onSelectCategory(`View-${viewType}`);
+    }
+    setShowViewPopup(false);
+  };
+
+  const handleRatingSelect = (ratingType: string) => {
+    if (ratingType === 'none') {
+      onSelectCategory('All');
+    } else {
+      onSelectCategory(`Rating-${ratingType}`);
+    }
+    setShowRatingPopup(false);
+  };
+
+  const handleLocationSelect = () => {
+    onSelectCategory(`Location-${locationRadius}`);
+    setShowLocationPopup(false);
+  };
+
+
   return (
     <>
       <div className="bg-white rounded-2xl p-4 shadow-sm">
-        <div className="flex gap-3 items-center">
-          {/* All button - smaller */}
+        <div className="flex gap-2 items-center overflow-x-auto scrollbar-hide">
+          {/* All button */}
           <button
             onClick={() => onSelectCategory('All')}
-            className={`flex-shrink-0 px-3 py-2 rounded-lg border text-sm font-medium transition-all duration-200 focus:outline-none ${
+            className={`flex-shrink-0 px-2 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 focus:outline-none ${
               activeCategory === 'All'
                 ? 'bg-rose-700 text-white border-rose-700 shadow-md'
                 : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300 hover:bg-rose-50'
@@ -72,10 +100,46 @@ export function CategoryCarousel({ activeCategory, onSelectCategory }: CategoryC
           {/* List button */}
           <button
             onClick={() => setShowCategoryList(true)}
-            className="flex-shrink-0 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:border-rose-300 hover:bg-rose-50 transition-all duration-200 focus:outline-none flex items-center gap-2"
+            className="flex-shrink-0 px-2 py-1.5 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-rose-300 hover:bg-rose-50 transition-all duration-200 focus:outline-none flex items-center gap-1"
           >
-            <List className="w-4 h-4" />
-            <span className="text-sm font-medium">List</span>
+            <List className="w-3 h-3" />
+            <span className="text-xs font-medium">List</span>
+          </button>
+
+          {/* View button */}
+          <button
+            onClick={() => setShowViewPopup(true)}
+            className={`flex-shrink-0 px-2 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 focus:outline-none ${
+              activeCategory.startsWith('View-')
+                ? 'bg-blue-700 text-white border-blue-700 shadow-md'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+            }`}
+          >
+            View
+          </button>
+
+          {/* Rating button */}
+          <button
+            onClick={() => setShowRatingPopup(true)}
+            className={`flex-shrink-0 px-2 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 focus:outline-none ${
+              activeCategory.startsWith('Rating-')
+                ? 'bg-yellow-700 text-white border-yellow-700 shadow-md'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-yellow-300 hover:bg-yellow-50'
+            }`}
+          >
+            Rating
+          </button>
+
+          {/* Location button */}
+          <button
+            onClick={() => setShowLocationPopup(true)}
+            className={`flex-shrink-0 px-2 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 focus:outline-none ${
+              activeCategory.startsWith('Location-')
+                ? 'bg-green-700 text-white border-green-700 shadow-md'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-green-300 hover:bg-green-50'
+            }`}
+          >
+            Location
           </button>
 
         </div>
@@ -84,26 +148,26 @@ export function CategoryCarousel({ activeCategory, onSelectCategory }: CategoryC
       {/* Category List Popup */}
       {showCategoryList && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[75vh] flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Select Category</h3>
+            <div className="flex items-center justify-between p-3 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">Select Category</h3>
               <button
                 onClick={() => setShowCategoryList(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                <X className="w-5 h-5 text-gray-500" />
+                <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
 
             {/* Scrollable category list */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="space-y-2">
+            <div className="flex-1 overflow-y-auto p-3 pb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-1 gap-1.5 sm:gap-2">
                 {availableCategories.map((category) => (
                   <button
                     key={category}
                     onClick={() => handleCategorySelect(category)}
-                    className={`w-full text-left px-4 py-3 rounded-lg border text-sm font-medium transition-all duration-200 focus:outline-none ${
+                    className={`text-left px-2 py-1.5 sm:px-3 sm:py-2 rounded-md border text-xs sm:text-sm font-medium transition-all duration-200 focus:outline-none ${
                       activeCategory === category
                         ? 'bg-rose-700 text-white border-rose-700 shadow-md'
                         : 'bg-white text-gray-700 border-gray-200 hover:border-rose-300 hover:bg-rose-50'
@@ -112,6 +176,157 @@ export function CategoryCarousel({ activeCategory, onSelectCategory }: CategoryC
                     {category}
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Popup */}
+      {showViewPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[75vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-3 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">Sort by View</h3>
+              <button
+                onClick={() => setShowViewPopup(false)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            {/* View Options */}
+            <div className="flex-1 overflow-y-auto p-3 pb-4">
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleViewSelect('none')}
+                  className="w-full text-left px-3 py-2 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 focus:outline-none flex items-center gap-2"
+                >
+                  <X className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm font-medium">None</span>
+                </button>
+                
+                <button
+                  onClick={() => handleViewSelect('highest')}
+                  className="w-full text-left px-3 py-2 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 focus:outline-none flex items-center gap-2"
+                >
+                  <ChevronUp className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium">Highest to Lowest</span>
+                </button>
+                
+                <button
+                  onClick={() => handleViewSelect('lowest')}
+                  className="w-full text-left px-3 py-2 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 focus:outline-none flex items-center gap-2"
+                >
+                  <ChevronDown className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium">Lowest to Highest</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rating Popup */}
+      {showRatingPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[75vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-3 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">Sort by Rating</h3>
+              <button
+                onClick={() => setShowRatingPopup(false)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Rating Options */}
+            <div className="flex-1 overflow-y-auto p-3 pb-4">
+              <div className="space-y-2">
+                <button
+                  onClick={() => handleRatingSelect('none')}
+                  className="w-full text-left px-3 py-2 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 focus:outline-none flex items-center gap-2"
+                >
+                  <X className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm font-medium">None</span>
+                </button>
+                
+                <button
+                  onClick={() => handleRatingSelect('highest')}
+                  className="w-full text-left px-3 py-2 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-yellow-300 hover:bg-yellow-50 transition-all duration-200 focus:outline-none flex items-center gap-2"
+                >
+                  <ChevronUp className="w-4 h-4 text-yellow-600" />
+                  <span className="text-sm font-medium">Highest Rated</span>
+                </button>
+                
+                <button
+                  onClick={() => handleRatingSelect('lowest')}
+                  className="w-full text-left px-3 py-2 rounded-md border border-gray-200 bg-white text-gray-700 hover:border-yellow-300 hover:bg-yellow-50 transition-all duration-200 focus:outline-none flex items-center gap-2"
+                >
+                  <ChevronDown className="w-4 h-4 text-yellow-600" />
+                  <span className="text-sm font-medium">Lowest Rated</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Location Popup */}
+      {showLocationPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md max-h-[75vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-3 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">Choose Distance</h3>
+              <button
+                onClick={() => setShowLocationPopup(false)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Location Options */}
+            <div className="flex-1 overflow-y-auto p-3 pb-4">
+              <div className="space-y-4">
+                {/* Distance Display */}
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{locationRadius} km</div>
+                  <div className="text-sm text-gray-500">Search radius</div>
+                </div>
+
+                {/* Slider */}
+                <div className="px-2">
+                  <input
+                    type="range"
+                    min="0"
+                    max="50"
+                    value={locationRadius}
+                    onChange={(e) => setLocationRadius(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                    style={{
+                      background: `linear-gradient(to right, #10b981 0%, #10b981 ${(locationRadius / 50) * 100}%, #e5e7eb ${(locationRadius / 50) * 100}%, #e5e7eb 100%)`
+                    }}
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>0 km</span>
+                    <span>50 km</span>
+                  </div>
+                </div>
+
+                {/* Apply Button */}
+                <button
+                  onClick={handleLocationSelect}
+                  className="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <MapPin className="w-4 h-4" />
+                  <span className="text-sm font-medium">Apply Filter</span>
+                </button>
               </div>
             </div>
           </div>

@@ -2,14 +2,19 @@ import React, { useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, MessageCircle, User } from 'lucide-react';
 import { SupabaseContext } from '../context/SupabaseContext';
+import { useChat } from '../context/ChatContext';
 
 export function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const supabaseContext = useContext(SupabaseContext);
   const { user } = supabaseContext || { user: null };
+  const { isInChatView } = useChat();
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Debug logging
+  console.log('BottomNav: isInChatView =', isInChatView, 'location =', location.pathname);
 
   const getNavItems = () => {
     if (user?.role === 'vendor') {
@@ -30,7 +35,7 @@ export function BottomNav() {
 
   const navItems = getNavItems();
 
-  if (!user) return null;
+  if (!user || isInChatView) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40 safe-area">
