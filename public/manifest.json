@@ -1,7 +1,7 @@
 {
-  "name": "Wedding Portfolio - Goan Vendors",
-  "short_name": "Wedding Portfolio",
-  "description": "Discover and book Goan wedding vendors - photographers, decorators, venues, and more",
+  "name": "GoaFYI - Event Vendors",
+  "short_name": "GoaFYI",
+  "description": "Discover and book Goan event vendors - photographers, decorators, venues, and more",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
